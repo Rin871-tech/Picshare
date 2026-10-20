@@ -1,0 +1,11 @@
+{
+  "name": "picshare-social-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Instagram-inspired mini social network with vanilla JS, Express, and MongoDB",
+  "scripts": {
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev",
+    "test": "npm --prefix backend test"
+  }
+}
