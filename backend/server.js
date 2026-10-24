@@ -145,13 +145,65 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
-// ── MongoDB + start ───────────────────────────────────────────────────────────
+
+/* ── MongoDB + start ─────────────────────────────────────────────── */
 async function start() {
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/picshare');
-  const storyCleanup = setInterval(() => require('./routes/community').cleanupStories().catch(() => {}), 60000); storyCleanup.unref();
+  const mongoUri = process.env.MONGODB_URI;
+
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI is missing from the environment.');
+  }
+
+  await mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 15000
+  });
+
+  console.log('PicShare database connected.');
+
+  const storyCleanup = setInterval(() => {
+    require('./routes/community')
+      .cleanupStories()
+      .catch(() => {});
+  }, 60000);
+
+  storyCleanup.unref();
+
   server.on('close', () => clearInterval(storyCleanup));
-  await new Promise(resolve => server.listen(PORT, resolve));
-  console.log(`PicShare API + Socket.IO listening on http://localhost:${PORT}`);
+
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(PORT, '0.0.0.0', () => {
+      server.removeListener('error', reject);
+      resolve();
+    });
+  });
+
+  console.log(`PicShare listening on port ${PORT}.`);
 }
-if (require.main === module) start().catch(() => { console.error('Database connection or server startup failed. Check configuration.'); process.exitCode = 1; });
+
+if (require.main === module) {
+  start().catch((error) => {
+    // Redact credentials and connection strings before logging.
+    const redact = (value) => String(value || '')
+      .replace(
+        /mongodb(?:\+srv)?:\/\/[^\s"'`]+/gi,
+        '[REDACTED_MONGODB_URI]'
+      )
+      .replace(
+        /(password|passwd|token|secret|api[_-]?key)\s*[:=]\s*[^,\s]+/gi,
+        '$1=[REDACTED]'
+      );
+
+    console.error('PicShare startup failed:', {
+      name: error?.name || 'Error',
+      code: error?.code || error?.cause?.code || null,
+      message: redact(error?.message),
+      stack: redact(error?.stack)
+    });
+
+    process.exitCode = 1;
+  });
+}
+
 module.exports = { app, server, io, start };
+
