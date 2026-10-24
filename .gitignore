@@ -4,3 +4,5 @@ backend/.env
 backend/uploads/*
 !backend/uploads/.gitkeep
 .DS_Store
+
+backend/uploads-private/

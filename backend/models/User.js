@@ -13,7 +13,18 @@ const userSchema = new mongoose.Schema({
   },
   googleId: { type: String, trim: true },
   bio: { type: String, default: '', maxlength: 160 },
-  avatarUrl: { type: String, default: '' }
+  avatarUrl: { type: String, default: '' },
+  website: { type: String, maxlength: 200, default: '' },
+  categories: [{ type: String, maxlength: 40 }],
+  pinnedPosts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Post' }],
+  privacy: {
+    account: { type: String, enum: ['public', 'private'], default: 'public' },
+    messages: { type: String, enum: ['everyone', 'following', 'nobody'], default: 'everyone' },
+    calls: { type: String, enum: ['everyone', 'following', 'nobody'], default: 'everyone' },
+    stories: { type: String, enum: ['public', 'followers'], default: 'public' },
+    notifications: { type: Boolean, default: true }
+  }
+
 }, {
   timestamps: true,
   toJSON: {
@@ -21,6 +32,7 @@ const userSchema = new mongoose.Schema({
       delete ret.passwordHash;
       delete ret.email;
       delete ret.__v;
+      delete ret.privacy;
       return ret;
     }
   }

@@ -1,0 +1,50 @@
+:root { --muted:#706961;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-6:24px;--space-8:32px;--radius-sm:8px;--radius-lg:18px;--shadow-soft:0 4px 24px #29252208;--surface:#fff;--accent:#c4646d;--focus:#825551; }
+:focus-visible { outline:3px solid var(--focus);outline-offset:3px; }
+.feature-view { max-width:1100px;margin:auto;padding-bottom:80px; }
+.feature-heading { display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 28px; }
+.feature-heading h1 { font-family:Georgia,serif;font-size:clamp(32px,5vw,52px);font-weight:400;line-height:1.1;margin:8px 0;letter-spacing:-1.5px; }
+.feature-heading p { max-width:620px;line-height:1.7;color:var(--muted); }
+.feature-tabs,.filter-row,.feature-actions { display:flex;gap:10px;flex-wrap:wrap;margin:18px 0; }
+.feature-tabs button,.filter-row button { border:1px solid var(--line);background:white;padding:10px 16px;border-radius:30px;cursor:pointer;font:inherit; }
+.feature-tabs button.active { background:var(--ink);color:#fff; }
+.feature-search { display:flex;gap:12px;margin:24px 0; }
+.feature-search input { flex:1;min-width:0; }
+.feature-view input,.feature-view textarea,.feature-view select,.field-pair select { border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;color:var(--ink);font:inherit;max-width:100%; }
+.feature-view label,.feature-form label { display:flex;flex-direction:column;gap:8px;font-weight:500;font-size:13px; }
+.feature-form { display:grid;gap:16px;padding:24px;background:white;border:1px solid var(--line);border-radius:var(--radius-lg);margin:22px 0; }
+.feature-form h2 { margin:0;font-family:Georgia,serif;font-weight:400; }
+.field-pair { display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0; }
+.photo-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start; }
+.photo-tile { margin:0;min-width:0; }
+.photo-open { padding:0;border:0;background:transparent;width:100%;cursor:pointer; }
+.photo-tile img { width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:12px;display:block; }
+.photo-tile:nth-child(3n+2) img { aspect-ratio:1; }
+.photo-caption { display:flex;flex-direction:column;gap:5px;padding:12px 1px 20px;font-size:13px;line-height:1.5;overflow-wrap:anywhere; }
+.photo-caption small { color:var(--muted); }
+.feature-empty { padding:48px 20px;text-align:center;background:#fff;border:1px dashed var(--line);border-radius:18px;color:var(--muted);line-height:1.8; }
+.resource-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0; }
+.resource-card { text-align:left;padding:24px;border:1px solid var(--line);border-radius:16px;background:#fff;color:inherit;font:inherit;cursor:pointer; }
+.resource-card strong { display:block;font-family:Georgia,serif;font-size:25px;font-weight:400;margin:10px 0; }
+.resource-card p { color:var(--muted);line-height:1.6; }
+.member-row,.notice-row { display:flex;gap:12px;align-items:center;justify-content:space-between;padding:16px 0;border-bottom:1px solid var(--line); }
+.member-row>div,.notice-row>div { min-width:0;overflow-wrap:anywhere; }
+.metric-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:24px 0; }
+.metric { background:#fff;border:1px solid var(--line);border-radius:16px;padding:24px; }
+.metric strong { display:block;font-size:36px;font-family:Georgia,serif;font-weight:400;margin-bottom:8px; }
+.story-stage { background:#292522;color:#fff;border-radius:18px;overflow:hidden;position:relative;max-width:500px;margin:auto; }
+.story-stage img { width:100%;max-height:65vh;object-fit:contain;display:block; }
+.story-overlay { padding:22px;font-size:22px;white-space:pre-wrap;overflow-wrap:anywhere; }
+.story-button { background:none;border:0;display:flex;flex-direction:column;gap:8px;align-items:center;font:inherit;cursor:pointer;min-width:70px; }
+.story-button img,.story-button .story-initial { width:58px;height:58px;border-radius:50%;object-fit:cover;border:2px solid var(--accent);padding:3px; }
+.story-initial { display:grid;place-items:center;background:#f7e8e5;font-weight:600; }
+.post-extra { display:flex;gap:14px;flex-wrap:wrap;padding:0 22px 18px; }
+.post-extra button { font-size:12px; }
+.bottom-nav { display:none; }
+.feature-view .post-card { max-width:620px;margin:20px auto; }
+.feature-error { color:#9e3540;line-height:1.6; }
+.skeleton-grid { height:300px;background:linear-gradient(90deg,#f3eeea,#faf8f6,#f3eeea);border-radius:16px;animation:pulse 1.5s infinite; }
+@keyframes pulse { 50% {opacity:.55} }
+@media(prefers-reduced-motion:reduce) { * { scroll-behavior:auto!important;animation:none!important;transition:none!important; } }
+@media(max-width:760px) { .feature-view{padding:24px 16px 100px}.photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.resource-grid{grid-template-columns:1fr}.metric-grid{gap:8px}.metric{padding:16px 10px}.metric strong{font-size:28px}.bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:30;justify-content:space-around;background:#fffffff5;border-top:1px solid var(--line);padding:8px 4px max(8px,env(safe-area-inset-bottom))}.bottom-nav button,.bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:4px;border:0;background:none;text-decoration:none;color:var(--ink);font-size:22px;min-width:52px;min-height:44px;padding:4px}.bottom-nav span{font-size:10px}.main-content{padding-bottom:75px}.mobile-header{padding-top:max(10px,env(safe-area-inset-top))}.field-pair{grid-template-columns:1fr}.feature-heading{margin-bottom:16px}.feature-form{padding:18px}.feature-tabs{gap:6px}.feature-tabs button{padding:9px 12px;font-size:12px}.feature-search{flex-wrap:wrap}.feature-search input{min-width:65%}.photo-caption{font-size:12px}.feature-actions .btn{min-height:44px} }
+
+.circle-discussion{max-height:360px;overflow:auto;background:white;border:1px solid var(--line);border-radius:14px;padding:16px}.discussion-message{padding:12px 4px;border-bottom:1px solid var(--line)}.discussion-message p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}.discussion-message small{color:var(--muted);font-size:11px}

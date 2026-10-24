@@ -3,6 +3,7 @@
   const API_ORIGIN = API_BASE.replace(/\/api\/?$/, '');
   const TOKEN_KEY = 'picshare_token';
   const api = {
+    origin: API_ORIGIN,
     get token() { return localStorage.getItem(TOKEN_KEY); },
     setToken(token) { if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY); },
     async request(path, options = {}) {
@@ -13,7 +14,7 @@
         headers['Content-Type'] = 'application/json';
         options.body = JSON.stringify(options.body);
       }
-      const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      const response = await fetch(`${API_BASE}${path}`, { signal: AbortSignal.timeout(20000), ...options, headers });
       const contentType = response.headers.get('content-type') || '';
       let data = {};
       if (contentType.includes('application/json')) {

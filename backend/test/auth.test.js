@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+// Never run integration tests against the application database.
+const testDatabase = process.env.TEST_MONGODB_URI;
+if (!testDatabase) {
+  test('Authentication integration (set TEST_MONGODB_URI to a disposable database)', { skip: true }, () => {});
+} else {
+process.env.JWT_SECRET ||= 'test-only-secret-with-at-least-32-characters';
+process.env.GOOGLE_CLIENT_ID ||= 'test-client-id';
 const express = require('express');
 const mongoose = require('mongoose');
 const { OAuth2Client } = require('google-auth-library');
@@ -12,7 +18,7 @@ let server;
 let baseUrl;
 
 test.before(async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(testDatabase);
 
   const app = express();
   app.use(express.json());
@@ -407,3 +413,5 @@ test.describe('Google OAuth Endpoint', () => {
     }
   });
 });
+
+}

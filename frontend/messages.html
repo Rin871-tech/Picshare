@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="PicShare Messages — your private conversations">
+  <title>Messages — PicShare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Grand+Hotel&display=swap" rel="stylesheet">
+  <!-- Leaflet for map previews -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/messages.css">
+</head>
+<body class="messages-body">
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Redirect to main app if not logged in -->
+  <div id="auth-guard" hidden></div>
+
+  <div id="messages-app" class="messages-shell" hidden>
+
+    <!-- Left: Conversation list -->
+    <aside class="conv-sidebar" id="conv-sidebar">
+      <div class="conv-sidebar-header">
+        <button class="brand brand-button back-to-app" id="back-to-app" title="Back to PicShare">
+          <span class="brand-mark">✳</span>
+        </button>
+        <h1 class="conv-sidebar-title">Messages</h1><button id="enable-notifications" class="icon-button" aria-label="Enable browser notifications" title="Enable browser notifications">♧</button>
+        <button class="icon-button" id="new-conv-btn" aria-label="Start new conversation" title="New message">✉</button>
+      </div>
+      <div class="conv-search-wrap">
+        <input id="conv-search" type="search" placeholder="Search conversations…" maxlength="40" aria-label="Search conversations">
+      </div>
+      <div id="conv-list" class="conv-list" role="list">
+        <div class="conv-skeleton"><div class="sk sk-avatar"></div><div class="sk-lines"><div class="sk sk-line"></div><div class="sk sk-line sk-short"></div></div></div>
+        <div class="conv-skeleton"><div class="sk sk-avatar"></div><div class="sk-lines"><div class="sk sk-line"></div><div class="sk sk-line sk-short"></div></div></div>
+        <div class="conv-skeleton"><div class="sk sk-avatar"></div><div class="sk-lines"><div class="sk sk-line"></div><div class="sk sk-line sk-short"></div></div></div>
+      </div>
+    </aside>
+
+    <!-- Center: Active conversation -->
+    <main class="conv-main" id="conv-main">
+      <div class="conv-empty-state" id="conv-empty-state">
+        <div class="conv-empty-icon">✉</div>
+        <h2>Your messages</h2>
+        <p>Send a message to a friend.<br>Your conversations will appear here.</p>
+        <button class="btn btn-primary" id="conv-empty-new">Start a conversation</button>
+      </div>
+
+      <!-- Active thread (hidden until conversation opened) -->
+      <div class="conv-thread" id="conv-thread" hidden>
+        <!-- Thread header -->
+        <header class="thread-header" id="thread-header">
+          <button class="icon-button thread-back" id="thread-back" aria-label="Back to conversations">←</button>
+          <div class="thread-peer" id="thread-peer">
+            <div class="thread-peer-avatar" id="thread-peer-avatar"></div>
+            <div class="thread-peer-info">
+              <span class="thread-peer-name" id="thread-peer-name"></span>
+              <span class="thread-peer-status" id="thread-peer-status">offline</span>
+            </div>
+          </div>
+          <div class="thread-actions">
+            <button class="icon-button" id="btn-call-audio" aria-label="Start audio call" title="Audio call">📞</button>
+            <button class="icon-button" id="btn-call-video" aria-label="Start video call" title="Video call">📹</button>
+            <button class="icon-button" id="btn-thread-info" aria-label="Conversation info" title="Info">ⓘ</button>
+          </div>
+        </header>
+
+        <aside id="conversation-details" class="conversation-details" hidden></aside>
+        <!-- Message list -->
+        <div class="thread-messages" id="thread-messages" role="log" aria-live="polite" aria-label="Conversation messages"></div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" id="typing-indicator" hidden>
+          <span class="typing-dots"><span></span><span></span><span></span></span>
+          <span id="typing-label"></span>
+        </div>
+
+        <!-- Composer -->
+        <form class="thread-composer" id="thread-composer" autocomplete="off">
+          <div class="composer-attach-menu" id="composer-attach-menu" hidden>
+            <button type="button" class="attach-option" id="attach-image">📷 Photo</button>
+            <button type="button" class="attach-option" id="attach-location">📍 Location</button>
+            <button type="button" class="attach-option" id="attach-live-location">🗺 Live location</button>
+          </div>
+          <button type="button" class="composer-attach-btn icon-button" id="composer-attach-btn" aria-label="Attach file">＋</button>
+          <input id="msg-text" class="composer-input" placeholder="Message…" maxlength="4000" aria-label="Type a message" autocomplete="off">
+          <input id="msg-image-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden aria-label="Choose image">
+          <button type="submit" class="composer-send btn btn-primary" id="composer-send-btn" disabled aria-label="Send message">↗</button>
+        </form>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- New Conversation Modal -->
+  <div id="new-conv-modal" class="modal-backdrop" hidden>
+    <section class="modal new-conv-modal" role="dialog" aria-modal="true" aria-labelledby="new-conv-title">
+      <header class="modal-header">
+        <button class="icon-button" data-close="new-conv-modal" aria-label="Close">×</button>
+        <h2 id="new-conv-title">New message</h2>
+        <span class="modal-spacer"></span>
+      </header>
+      <div style="padding:16px">
+        <input id="new-conv-search" type="search" placeholder="Search people…" maxlength="40" class="conv-search-input" aria-label="Search people to message">
+        <div id="new-conv-results" class="new-conv-results"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Live Location Modal -->
+  <div id="live-location-modal" class="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="live-loc-title" style="max-width:380px">
+      <header class="modal-header">
+        <button class="icon-button" data-close="live-location-modal" aria-label="Close">×</button>
+        <h2 id="live-loc-title">Share live location</h2>
+        <span class="modal-spacer"></span>
+      </header>
+      <div style="padding:18px">
+        <p style="font-size:13px;color:#6b6460;margin:0 0 16px">Choose how long to share your live location. You can stop at any time.</p>
+        <div class="duration-options">
+          <button class="duration-opt" data-duration="15">15 minutes</button>
+          <button class="duration-opt" data-duration="60">1 hour</button>
+          <button class="duration-opt" data-duration="480">8 hours</button>
+        </div>
+        <p id="live-loc-error" class="form-error"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Active live location banner -->
+  <div id="live-loc-banner" class="live-loc-banner" hidden>
+    <span class="live-loc-dot"></span>
+    <span id="live-loc-banner-text">Sharing live location</span>
+    <button class="btn btn-secondary" id="stop-live-loc-btn" style="padding:6px 12px;font-size:11px">Stop</button>
+  </div>
+
+  <!-- WebRTC Call Overlay -->
+  <div id="call-overlay" class="call-overlay" hidden>
+    <div class="call-overlay-inner">
+      <div class="call-peer-avatar" id="call-peer-avatar"></div>
+      <div class="call-peer-name" id="call-peer-name"></div>
+      <div class="call-status" id="call-status">Calling…</div>
+      <div class="call-duration" id="call-duration" hidden>0:00</div>
+      <!-- Remote audio/video -->
+      <video id="remote-video" class="remote-video" autoplay playsinline hidden></video>
+      <video id="local-video" class="local-video" autoplay playsinline muted hidden></video>
+      <audio id="remote-audio" autoplay hidden></audio>
+      <div class="call-controls">
+        <button class="call-ctrl" id="call-mute" aria-label="Mute microphone" title="Mute">🎤</button>
+        <button class="call-ctrl call-ctrl-end" id="call-end" aria-label="End call" title="End call">📵</button>
+        <button class="call-ctrl" id="call-cam" aria-label="Toggle camera" title="Camera">📷</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming call notification -->
+  <div id="incoming-call" class="incoming-call" hidden>
+    <div class="incoming-call-inner">
+      <div class="incoming-call-avatar" id="incoming-call-avatar"></div>
+      <div>
+        <div class="incoming-call-name" id="incoming-call-name"></div>
+        <div class="incoming-call-type" id="incoming-call-type">Incoming call</div>
+      </div>
+      <div class="incoming-call-actions">
+        <button class="call-ctrl call-ctrl-end" id="incoming-reject" aria-label="Reject call" title="Reject">📵</button>
+        <button class="call-ctrl call-ctrl-accept" id="incoming-accept" aria-label="Accept call" title="Accept">📞</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin defer></script>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin defer></script>
+  <script src="js/config.js" defer></script><script src="js/api.js" defer></script>
+  <script src="js/messages.js" defer></script>
+</body>
+</html>

@@ -6,6 +6,8 @@
   "scripts": {
     "start": "npm --prefix backend start",
     "dev": "npm --prefix backend run dev",
-    "test": "npm --prefix backend test"
+    "test": "npm --prefix backend test",
+    "check": "node backend/scripts/check.js",
+    "migrate": "node backend/scripts/migrate-communications.js"
   }
 }

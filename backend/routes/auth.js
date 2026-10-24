@@ -195,5 +195,12 @@ router.post('/google', asyncHandler(async (req, res) => {
   res.json({ token: issueToken(user), user: user.toJSON() });
 }));
 
+router.get('/turn-credentials', require('../middleware/auth'), (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!process.env.TURN_URL || !process.env.TURN_SHARED_SECRET) return res.json({ configured: false });
+  const username = `${Math.floor(Date.now() / 1000) + 3600}:${req.user.id}`;
+  const credential = require('crypto').createHmac('sha1', process.env.TURN_SHARED_SECRET).update(username).digest('base64');
+  res.json({ urls: process.env.TURN_URL.split(',').map(s => s.trim()).filter(Boolean), username, credential });
+});
 module.exports = router;
 

@@ -1,3 +1,7 @@
+> Latest web upgrade and deployment handoff: [PicShare 3.0 guide](docs/PICSHARE-3.md). Native Android/iOS conversion is deferred until the owner deploys the backend.
+
+> PicShare 2.0 implementation, setup, migration, deployment, test results and remaining work: [Upgrade guide](docs/UPGRADE.md).
+
 # PicShare — Mini Social Media App
 
 An Instagram-inspired, responsive mini social network built with **HTML, CSS, vanilla JavaScript, Express.js, and MongoDB/Mongoose**.
