@@ -999,3 +999,7 @@
 .msg-bubble { overflow-wrap:anywhere; }
 
 .conversation-details{padding:16px;background:#fff;border-bottom:1px solid var(--line);max-height:40vh;overflow:auto}.conversation-details button{margin-right:16px}.messages-shell,.messages-body{height:100dvh}.thread-composer{padding-bottom:max(12px,env(safe-area-inset-bottom))}.thread-header{padding-top:max(12px,env(safe-area-inset-top))}
+
+#new-conv-btn{font-size:15px;display:flex;align-items:center;gap:6px;min-height:44px;width:auto} .conv-sidebar-title{font-size:22px}.messages-shell{height:100dvh}.thread-input{font-size:16px} .new-conv-person{min-height:56px}
+.messages-shell{grid-template-columns:340px minmax(0,1fr)}.conv-main,.conv-thread,.thread-messages,.msg-row{min-width:0}.conv-main,.conv-sidebar{height:100dvh}.msg-row{max-width:85%}.msg-content{min-width:0}.msg-bubble{white-space:pre-wrap;overflow-wrap:anywhere}.new-conv-modal{max-height:90dvh;overflow:auto}
+@media(max-width:720px){.messages-shell{grid-template-columns:1fr}.conv-sidebar-title{font-size:20px}#new-conv-btn{white-space:nowrap;font-size:14px}}

@@ -99,6 +99,7 @@
 
   // ── Boot ───────────────────────────────────────────────────────────────────
   async function boot() {
+    try { await PicShareAPI.ready; } catch { document.body.innerHTML = '<main><h1>Unable to open secure session storage</h1><p>Restart PicShare and try again.</p></main>'; return; }
     if (!window.PicShareAPI) {
       window.location.href = '/';
       return;
@@ -113,12 +114,15 @@
       state.user = data.user;
       const settings = await PicShareAPI.get('/settings').catch(() => ({}));
       state.browserNotify = settings.privacy?.notifications !== false;
-    } catch {
-      window.location.href = '/';
+    } catch (err) {
+      if (err.status === 401) { PicShareAPI.setToken(null); window.location.href = '/?auth=login'; return; }
+      $('#auth-guard').hidden = false;
+      $('#auth-guard').innerHTML = '<main style="padding:32px"><h1>Messages are temporarily unavailable</h1><p>Check your connection and try again. Your conversations are saved.</p><button class="btn btn-primary" onclick="location.reload()">Try again</button><a href="/">Back to PicShare</a></main>';
       return;
     }
 
     $('#messages-app').hidden = false;
+    window.PicShareContacts?.mount();
     attachEventListeners();
     connectSocket();
     await loadConversations();

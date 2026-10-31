@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PicShare</string>
+    <string name="title_activity_main">PicShare</string>
+    <string name="package_name">com.example.picshare</string>
+    <string name="custom_url_scheme">com.example.picshare</string>
+</resources>

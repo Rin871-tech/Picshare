@@ -24,6 +24,7 @@
   function showAuth() { window.dispatchEvent(new Event('picshare:logout')); authScreen.hidden = false; app.hidden = true; }
   function showApp() {
     authScreen.hidden = true;
+    window.PicShareContacts?.mount();
     app.hidden = false;
     window.dispatchEvent(new CustomEvent('picshare:ready', { detail: { user: state.user } }));
     try { renderSidebarUser(); } catch (err) { console.error('Error rendering sidebar user:', err); }
@@ -90,7 +91,7 @@
     button.disabled = true;
     try {
       const data = await PicShareAPI.post(`/auth/${mode === 'register' ? 'register' : 'login'}`, payload);
-      PicShareAPI.setToken(data.token);
+      await PicShareAPI.setToken(data.token);
       state.user = data.user;
       showApp();
       toast(mode === 'register' ? 'Welcome to PicShare ✳' : 'Welcome back!');
@@ -113,7 +114,7 @@
     if (button) button.disabled = true;
     try {
       const data = await PicShareAPI.post('/auth/google', { credential: response.credential });
-      PicShareAPI.setToken(data.token);
+      await PicShareAPI.setToken(data.token);
       state.user = data.user;
       showApp();
       toast(`Welcome, ${state.user.name || state.user.username}! ✳`);
@@ -126,6 +127,13 @@
   }
 
   async function initGoogleAuth() {
+    if (window.PicShareNative) {
+      $('#google-auth-btn').addEventListener('click', async () => {
+        try { await handleGoogleCredentialResponse({ credential: await window.PicShareNative.googleLogin() }); }
+        catch (err) { $('#auth-error').textContent = err.message; }
+      });
+      return;
+    }
     try {
       const config = await PicShareAPI.get('/auth/config').catch(() => ({}));
       state.googleClientId = config.googleClientId || '';
@@ -138,6 +146,10 @@
       customBtn.addEventListener('click', () => {
         const errorEl = $('#auth-error');
         errorEl.textContent = '';
+        if (window.PicShareNative) {
+          window.PicShareNative.googleLogin().then(credential => handleGoogleCredentialResponse({ credential })).catch(err => { errorEl.textContent = err.message; });
+          return;
+        }
         if (!state.googleClientId) {
           errorEl.textContent = 'Google Sign-In is not configured yet. Please set GOOGLE_CLIENT_ID in backend/.env.';
           return;
@@ -345,15 +357,19 @@
   $('#create-form').addEventListener('submit', async e => { e.preventDefault(); const file = postImage.files[0]; const error = $('#create-error'); if (!file) { error.textContent = 'Choose a photo before sharing.'; return; } const button = $('#create-submit'); button.disabled = true; error.textContent = ''; const fd = new FormData(); fd.append('image', file); fd.append('caption', $('#post-caption').value.trim()); fd.append('altText', $('#post-alt').value.trim()); fd.append('category', $('#post-category').value); fd.append('mood', $('#post-mood').value); if ($('#share-place').checked) { fd.append('sharePlace','true'); fd.append('placeLat',$('#place-lat').value); fd.append('placeLng',$('#place-lng').value); fd.append('placeLabel',$('#place-label').value); } try { await PicShareAPI.upload('/posts', fd); closeModal('create-modal'); $('#create-form').reset(); $('#image-preview').hidden = true; $('#upload-label').textContent = 'Choose a photo'; $('#caption-count').textContent = '0 / 2,200'; toast('Your moment is out in the world ✳'); if (state.view === 'home') { state.page = 1; loadFeed(true); } else navigate('home'); } catch (err) { error.textContent = err.message; } finally { button.disabled = false; } });
 
   async function boot() {
+    try { await PicShareAPI.ready; } catch { document.body.innerHTML = '<main><h1>Unable to open secure session storage</h1><p>Restart PicShare and try again.</p></main>'; return; }
+    setAuthMode(new URLSearchParams(location.search).get("auth") === "login" ? "login" : "register");
     initGoogleAuth();
     if (!PicShareAPI.token) { showAuth(); return; }
     try {
       const data = await PicShareAPI.get('/users/me');
       state.user = data.user;
       showApp();
-    } catch (_) {
-      PicShareAPI.setToken(null);
+    } catch (err) {
+      if (err.status === 401) await PicShareAPI.setToken(null);
       showAuth();
+      if (err.status !== 401) { $('#auth-error').textContent = 'Unable to reconnect. Your account is saved. Check your connection and reload.'; }
+      else setAuthMode('login');
     }
   }
   window.PicShareCore = { state, navigate, postCard, toast, loadStories };

@@ -4,8 +4,9 @@
   const TOKEN_KEY = 'picshare_token';
   const api = {
     origin: API_ORIGIN,
-    get token() { return localStorage.getItem(TOKEN_KEY); },
-    setToken(token) { if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY); },
+    ready: window.PicShareNative?.ready || Promise.resolve(),
+    get token() { return window.PicShareNative ? window.PicShareNative.token : localStorage.getItem(TOKEN_KEY); },
+    async setToken(token) { if (window.PicShareNative) { await window.PicShareNative.setToken(token); return; } if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY); },
     async request(path, options = {}) {
       const headers = { ...(options.headers || {}) };
       if (this.token) headers.Authorization = `Bearer ${this.token}`;

@@ -14,8 +14,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="auth-screen" class="auth-screen">
     <section class="auth-art"><div class="brand brand-large"><span class="brand-mark">✳</span> picshare</div><p class="art-copy">A little corner of the internet<br>for your favorite moments.</p><div class="art-stack"><div class="art-photo art-photo-one">✿</div><div class="art-photo art-photo-two">☼</div><div class="art-photo art-photo-three">♡</div></div><span class="art-note">make it a moment.</span></section>
-    <section class="auth-panel"><div class="auth-box"><div class="brand auth-brand"><span class="brand-mark">✳</span> picshare</div><p class="muted auth-tagline">Share moments. Find your people.</p>
-      <div class="auth-tabs"><button class="auth-tab active" data-auth-mode="login" type="button">Log in</button><button class="auth-tab" data-auth-mode="register" type="button">Sign up</button></div>
+    <section class="auth-panel"><div class="auth-box"><div class="brand auth-brand"><span class="brand-mark">✳</span> picshare</div><p class="muted auth-tagline">Create your account. Find your people.</p><h1 class="auth-welcome">Join PicShare</h1>
+      <div class="auth-tabs"><button class="auth-tab" data-auth-mode="login" type="button">Log in</button><button class="auth-tab active" data-auth-mode="register" type="button">Sign up</button></div>
       <div class="oauth-container">
         <div id="google-btn-slot" class="google-btn-slot">
           <button type="button" id="google-auth-btn" class="btn btn-google btn-full">
@@ -32,7 +32,7 @@
       </div>
       <div class="auth-divider"><span>or continue with email</span></div>
       <form id="auth-form" class="auth-form">
-        <div id="register-fields" hidden>
+        <div id="register-fields">
           <label for="auth-name">Full name</label>
           <input id="auth-name" name="name" autocomplete="name" placeholder="Your name" maxlength="60">
           <label for="auth-username">Username</label>
@@ -42,9 +42,9 @@
         <label for="auth-email">Email address</label>
         <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="254">
         <label for="auth-password">Password</label>
-        <input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="At least 8 characters" minlength="8" maxlength="72" required>
+        <input id="auth-password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" maxlength="72" required>
         <p id="auth-error" class="form-error" role="alert" aria-live="polite"></p>
-        <button id="auth-submit" class="btn btn-primary btn-full" type="submit">Log in <span>→</span></button>
+        <button id="auth-submit" class="btn btn-primary btn-full" type="submit">Create account <span>→</span></button>
       </form><p class="fine-print">By continuing, you agree to keep PicShare kind and respectful.</p>
     </div></section>
   </div>
@@ -67,14 +67,14 @@
       <div id="feed-view" class="feed-layout">
         <section class="feed-column">
           <div class="stories-card"><div class="section-kicker"><span>STORIES</span><span class="muted">Here for today</span></div><div id="story-list" class="story-list"><div class="skeleton-story"></div><div class="skeleton-story"></div><div class="skeleton-story"></div><div class="skeleton-story"></div></div></div>
-          <div class="feed-heading"><div><p class="eyebrow">YOUR DAILY DOSE</p><h1 id="feed-title">The little things.</h1></div><div class="feed-toggle"><button class="feed-mode active" data-mode="all">Recent</button><button class="feed-mode" data-mode="following">Following</button></div></div>
+          <div class="messaging-entry"><div><strong>Your people, one conversation away.</strong><p>Find a friend and start chatting on PicShare.</p></div><a class="btn btn-primary" href="/messages.html">Open messages →</a></div><div class="feed-heading"><div><p class="eyebrow">YOUR DAILY DOSE</p><h1 id="feed-title">The little things.</h1></div><div class="feed-toggle"><button class="feed-mode active" data-mode="all">Recent</button><button class="feed-mode" data-mode="following">Following</button></div></div>
           <div id="feed-list" class="feed-list"><div class="loading-card">Loading your feed<span class="loading-dots"> ···</span></div></div>
           <button id="load-more" class="btn btn-secondary btn-full load-more" hidden>Load more moments</button>
         </section>
         <aside class="right-rail"><div class="welcome-card"><div class="welcome-spark">✳</div><p class="eyebrow">A FRIENDLY REMINDER</p><h2>Life looks good<br>from here.</h2><p>Follow a few people, share a moment, and make this space yours.</p><button class="text-link" data-view="explore">Find your people <span>↗</span></button></div>
           <div class="suggestion-card"><div class="rail-heading"><h3>People to know</h3><button class="text-link" data-view="explore">See all</button></div><div id="suggestion-list"><p class="muted small">Search for people to get started.</p></div></div><div class="rail-footer">About · Community · Privacy · Help<br><span>© 2026 PICSHARE</span></div></aside>
       </div>
-      <section id="explore-view" class="page-view" hidden><div class="page-heading"><p class="eyebrow">GOOD PEOPLE, GOOD FEEDS</p><h1>Find your people.</h1><p class="muted">Search names and usernames to discover your next favorite account.</p></div><div class="search-box"><span>⌕</span><input id="people-search" type="search" placeholder="Search people..." maxlength="40" aria-label="Search people"><kbd>↵</kbd></div><div id="people-results" class="people-grid"><p class="muted">Start typing to find people on PicShare.</p></div></section>
+      <section id="explore-view" class="page-view" hidden><div class="page-heading"><p class="eyebrow">GOOD PEOPLE, GOOD FEEDS</p><h1>Find your people.</h1><p class="muted">Search names and usernames to discover your next favorite account.</p></div><div class="search-box"><span>⌕</span><input id="people-search" type="search" placeholder="Search people..." maxlength="40" aria-label="Search people"><kbd>↵</kbd></div><div data-contact-tools></div><div id="people-results" class="people-grid"><p class="muted">Start typing to find people on PicShare.</p></div></section>
       <section id="feature-view" class="page-view feature-view" hidden aria-live="polite"></section><section id="profile-view" class="page-view" hidden><div id="profile-content"></div></section>
     </main>
     <nav class="bottom-nav" aria-label="Mobile navigation"><button data-view="home" aria-label="Home">⌂<span>Home</span></button><button data-view="explore" aria-label="Discover">⌕<span>Discover</span></button><button data-action="create" aria-label="Create">＋<span>Create</span></button><a href="/messages.html" aria-label="Messages">✉<span>Messages</span></a><button data-view="profile" aria-label="Profile">◉<span>Profile</span></button></nav>
@@ -82,5 +82,5 @@
 
   <div id="create-modal" class="modal-backdrop" hidden><section class="modal create-modal" role="dialog" aria-modal="true" aria-labelledby="create-title"><header class="modal-header"><button class="icon-button" data-close="create-modal" aria-label="Close">×</button><h2 id="create-title">Create a moment</h2><button class="text-link" form="create-form" type="submit">Share</button></header><form id="create-form"><label class="upload-zone" for="post-image"><span class="upload-icon">↥</span><strong id="upload-label">Choose a photo</strong><span>JPEG, PNG, WEBP or GIF · up to 5 MB</span><img id="image-preview" alt="Selected photo preview" hidden></label><input id="post-image" type="file" accept="image/jpeg,image/png,image/webp,image/gif" required hidden><label class="sr-only" for="post-caption">Caption</label><textarea id="post-caption" placeholder="Write a caption..." maxlength="2200" rows="4"></textarea><button id="suggest-caption" class="text-link" type="button">Suggest caption, hashtags &amp; alt text</button><p id="ai-status" role="status"></p><section id="ai-preview" class="feature-form" hidden><h3>AI Studio — review suggestions</h3><label>Suggested caption &amp; hashtags<textarea id="ai-caption-preview" maxlength="2200" rows="4"></textarea></label><label>Suggested description<input id="ai-alt-preview" maxlength="500"></label><p id="ai-topics" class="muted small"></p><button id="apply-ai" class="btn btn-secondary" type="button">Apply these suggestions</button></section><label for="post-alt">Photo description</label><input id="post-alt" maxlength="500" placeholder="Describe your photo for accessibility"><div class="field-pair"><label>Category<select id="post-category"><option value="">Choose a category</option><option>nature</option><option>travel</option><option>architecture</option><option>portraits</option><option>street</option><option>food</option></select></label><label>Mood<select id="post-mood"><option value="">Choose a mood</option><option>cinematic</option><option>peaceful</option><option>vibrant</option><option>minimal</option></select></label></div><details class="place-options"><summary>Add an approximate place (optional)</summary><p class="muted small">Only include a place you want to publish. Coordinates are rounded to about 11 km; this never uses your live location.</p><label><input id="share-place" type="checkbox"> Publish approximate place</label><div class="field-pair"><label>Latitude<input id="place-lat" type="number" min="-90" max="90" step="any"></label><label>Longitude<input id="place-lng" type="number" min="-180" max="180" step="any"></label></div><label>Place name<input id="place-label" maxlength="80"></label></details><div class="caption-count"><span>Keep it you.</span><span id="caption-count">0 / 2,200</span></div><p id="create-error" class="form-error"></p><button id="create-submit" class="btn btn-primary btn-full" type="submit">Share your moment <span>↗</span></button></form></section></div>
   <div id="comments-modal" class="modal-backdrop" hidden><section class="modal comments-modal" role="dialog" aria-modal="true" aria-labelledby="comments-title"><header class="modal-header"><button class="icon-button" data-close="comments-modal" aria-label="Close">×</button><h2 id="comments-title">The conversation</h2><span class="modal-spacer"></span></header><div id="comments-list" class="comments-list"></div><form id="comment-form" class="comment-form"><input id="comment-input" maxlength="500" placeholder="Add a kind comment..." required aria-label="Add a comment"><button class="text-link" type="submit">Post</button></form><p id="comment-error" class="form-error"></p></section></div>
-  <script src="js/config.js" defer></script><script src="js/api.js" defer></script><script src="js/app.js" defer></script><script src="js/features.js" defer></script>
+  <script src="js/config.js" defer></script><script src="js/contacts.js" defer></script><script src="js/api.js" defer></script><script src="js/app.js" defer></script><script src="js/features.js" defer></script>
 </body></html>

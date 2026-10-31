@@ -33,9 +33,9 @@ const defaultOrigins = [
   'http://localhost:5500',
   'http://127.0.0.1:5500'
 ];
-const configuredOrigins = (process.env.CLIENT_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+const configuredOrigins = ([process.env.CLIENT_ORIGIN, (process.env.MOBILE_CLIENT_ORIGINS ?? 'https://localhost,capacitor://localhost')].filter(Boolean).join(',')).split(',').map(s => s.trim()).filter(Boolean);
 const allowedOrigins = process.env.NODE_ENV === 'production' ? configuredOrigins : Array.from(new Set([...defaultOrigins, ...configuredOrigins]));
-if (process.env.NODE_ENV === 'production' && !allowedOrigins.length) throw new Error('CLIENT_ORIGIN is required in production.');
+if (process.env.NODE_ENV === 'production' && !String(process.env.CLIENT_ORIGIN || '').trim()) throw new Error('CLIENT_ORIGIN is required in production.');
 
 // ── Socket.IO ─────────────────────────────────────────────────────────────────
 const io = new Server(server, {
@@ -107,6 +107,7 @@ const uploadLimiter = rateLimit({ windowMs: 600000, limit: 20, standardHeaders: 
 app.use('/api', (req, res, next) => req.method === 'POST' && req.is('multipart/form-data') ? uploadLimiter(req, res, next) : next());
 
 // ── API routes ────────────────────────────────────────────────────────────────
+app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);

@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
     }
   },
   googleId: { type: String, trim: true },
+  contactDiscoverable: { type: Boolean, default: false },
   bio: { type: String, default: '', maxlength: 160 },
   avatarUrl: { type: String, default: '' },
   website: { type: String, maxlength: 200, default: '' },
@@ -31,6 +32,7 @@ const userSchema = new mongoose.Schema({
     transform(_doc, ret) {
       delete ret.passwordHash;
       delete ret.email;
+      delete ret.contactDiscoverable;
       delete ret.__v;
       delete ret.privacy;
       return ret;
