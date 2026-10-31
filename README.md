@@ -196,3 +196,5 @@ Mongoose creates collections and indexes when the app starts and models are used
 ## Notes
 
 This is a complete educational MVP, not a production-hardened social network. It intentionally does not include stories, DMs, notifications, or video uploads. The “story” row is a discovery shortcut, not a real ephemeral story feature.
+
+Mobile builds and contact discovery: [docs/MOBILE.md](docs/MOBILE.md).

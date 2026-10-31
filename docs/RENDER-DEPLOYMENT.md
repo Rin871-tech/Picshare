@@ -82,3 +82,15 @@ not verify Atlas connectivity or production behavior.
 
 References: [Render disks](https://render.com/docs/disks),
 [Atlas driver connections](https://www.mongodb.com/docs/atlas/driver-connection/).
+
+## October 31 messaging/mobile release
+
+Commit `f304dec` deployed successfully as `dep-dbit338ae00c73ck4j5g`.
+Verified the signed-in live Messages page and New message contact controls.
+48 isolated local integration tests pass. Android debug APK compiled; iOS
+compilation and native device testing remain pending. See MOBILE.md for Google
+Cloud setup and contact-discovery limitations.
+
+Render logs also report the existing trust-proxy configuration warning. Verify
+Render's request proxy chain before setting TRUST_PROXY; until configured, IP
+rate limits may be shared between users behind Render's proxy.
