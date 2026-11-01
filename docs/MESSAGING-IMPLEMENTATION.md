@@ -88,3 +88,12 @@ authentication, messaging, call and location tests pass. Browser smoke test used
 synthetic accounts only in a separate local preview database: Requests badge,
 pending preview with disabled composer, accept, reply, and inbox move. No fake
 conversations or messages were inserted into the production database.
+
+## Render release
+
+Published November 1, 2026. Main implementation `adf3660`, REST fallback and live
+connection indicator `91f17cd`, final presence guard `5c2b192`. Render confirmed
+`5c2b192` Live in deployment `dep-dbjgt4fb9u1s73e0gl6g`. Authenticated production
+Socket.IO verification needs the owner's login after session expiry; no synthetic
+production account/message was created for that check. Android demo APK rebuilt
+successfully at `artifacts/PicShare-messaging-android.apk` (local artifact).
