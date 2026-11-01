@@ -100,7 +100,7 @@ router.patch('/settings', auth, asyncHandler(async (req, res) => {
   if (req.body.messages !== undefined) { if (!['everyone', 'following', 'nobody'].includes(req.body.messages)) throw fail('Invalid message privacy.', 400); req.user.set('privacy.messages', req.body.messages); }
   for (const key of ['presence', 'lastSeen']) if (req.body[key] !== undefined) { if (typeof req.body[key] !== 'boolean') throw fail('Invalid privacy value.', 400); req.user.set('privacy.' + key, req.body[key]); }
   await req.user.save();
-  if (req.body.presence === false || req.body.lastSeen === false) { const rows = await Conversation.find({ participants: req.user._id }); for (const row of rows) for (const id of row.participants) if (String(id) !== String(req.user._id)) req.app.get('io')?.to(`user:${id}`).emit('presence:offline', { userId: String(req.user._id) }); }
+  if (req.body.presence === false || req.body.lastSeen === false) { const rows = await Conversation.find({ participants: req.user._id, $or: [{ requestStatus: 'accepted' }, { requestStatus: { $exists: false } }] }); for (const row of rows) for (const id of row.participants) if (String(id) !== String(req.user._id)) req.app.get('io')?.to(`user:${id}`).emit('presence:offline', { userId: String(req.user._id) }); }
   res.json({ ok: true });
 }));
 

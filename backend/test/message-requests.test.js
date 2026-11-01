@@ -26,7 +26,9 @@ test('stranger request is unique, limited to one atomic introduction and separat
  assert.equal((await req(0,'/locations/live','POST',{conversationId:id,durationMinutes:15})).status,409);
 });
 test('pending request previews never emit delivery, read, typing, calls or presence receipts',async()=>{
- const sender=await connect(0), recipient=await connect(1); assert.equal((await ack(recipient,'conversation:join',{conversationId:id})).ok,true);
+ const sender=await connect(0), recipient=await connect(1); const leakedPresence=[]; sender.on('presence:offline', data=>leakedPresence.push(data));
+ await req(1,'/conversations/settings','PATCH',{presence:false,lastSeen:false}); await new Promise(resolve=>setTimeout(resolve,30)); assert.equal(leakedPresence.length,0); await req(1,'/conversations/settings','PATCH',{presence:true});
+ assert.equal((await ack(recipient,'conversation:join',{conversationId:id})).ok,true);
  assert.ok((await ack(recipient,'typing:start',{conversationId:id})).error); assert.ok((await ack(recipient,'message:received',{conversationId:id,messageId:first._id})).error);
  assert.ok((await ack(sender,'call:invite',{conversationId:id,recipientId:people[1].id,callType:'audio'})).error);
  assert.equal((await req(1,`/conversations/${id}/messages`)).status,200); assert.equal((await req(1,`/conversations/${id}/read`,'PATCH',{through:first._id})).status,409);
