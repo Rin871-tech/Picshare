@@ -127,6 +127,12 @@
     window.PicShareContacts?.mount();
     attachEventListeners();
     connectSocket();
+    const recoveryPoll = setInterval(async () => {
+      if (document.visibilityState !== 'visible' || state.socket?.connected) return;
+      await loadConversations();
+      if (state.activeConvId) recoverMessages(state.activeConvId).catch(() => {});
+    }, 20000);
+    window.addEventListener('pagehide', () => clearInterval(recoveryPoll), { once: true });
     await loadConversations();
 
     // If ?conv=<id> in URL, open that conversation
@@ -142,6 +148,7 @@
 
   // ── Socket.IO ──────────────────────────────────────────────────────────────
   function connectSocket() {
+    if (typeof window.io !== 'function') { $('#realtime-status').textContent = 'Live connection unavailable. Refreshing saved messages periodically.'; return; }
     const API_BASE = PicShareAPI.origin;
 
     state.socket = io(API_BASE, {
@@ -154,6 +161,7 @@
     const socket = state.socket;
 
     socket.on('connect', () => {
+      $('#realtime-status').textContent = 'Connected';
       console.log('[socket] connected');
       // Rejoin active conversation room
       if (state.activeConvId) {
@@ -168,10 +176,12 @@
       if (conversationId === state.activeConvId) { const conv = currentConversation(); if (conv) { requestControls(); await loadMessages(conversationId, true); await markRead(conversationId); } else { $('#conv-thread').hidden = true; $('#conv-empty-state').hidden = false; state.activeConvId = null; } }
     });
     socket.on('connect_error', err => {
+      $('#realtime-status').textContent = 'Reconnecting. Sent messages are saved.';
       console.warn('[socket] connect error:', err.message);
     });
 
     socket.on('disconnect', () => {
+      $('#realtime-status').textContent = 'Reconnecting. Sent messages are saved.';
       console.log('[socket] disconnected');
     });
 
