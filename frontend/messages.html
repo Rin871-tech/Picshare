@@ -31,6 +31,8 @@
       <div class="conv-search-wrap">
         <input id="conv-search" type="search" placeholder="Search conversations…" maxlength="40" aria-label="Search conversations">
       </div>
+      <nav class="inbox-tabs" aria-label="Message sections"><button data-inbox="inbox" class="active">Inbox</button><button data-inbox="requests">Requests <span id="request-count"></span></button><button data-inbox="archived">Archived</button></nav>
+      <button class="text-link messaging-settings" id="messaging-settings-btn">Messaging privacy</button><div id="inbox-user-results"></div>
       <div id="conv-list" class="conv-list" role="list">
         <div class="conv-skeleton"><div class="sk sk-avatar"></div><div class="sk-lines"><div class="sk sk-line"></div><div class="sk sk-line sk-short"></div></div></div>
         <div class="conv-skeleton"><div class="sk sk-avatar"></div><div class="sk-lines"><div class="sk sk-line"></div><div class="sk sk-line sk-short"></div></div></div>
@@ -49,6 +51,7 @@
 
       <!-- Active thread (hidden until conversation opened) -->
       <div class="conv-thread" id="conv-thread" hidden>
+        <div id="request-banner" class="request-banner" hidden></div>
         <!-- Thread header -->
         <header class="thread-header" id="thread-header">
           <button class="icon-button thread-back" id="thread-back" aria-label="Back to conversations">←</button>
@@ -154,6 +157,7 @@
     </div>
   </div>
 
+  <div id="messaging-settings" class="modal-backdrop" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="messaging-settings-title"><header class="modal-header"><h2 id="messaging-settings-title">Messaging privacy</h2><button class="icon-button" data-close="messaging-settings" aria-label="Close">×</button></header><form id="messaging-settings-form" class="messaging-privacy-form"><label>Who can send requests?<select name="messages"><option value="everyone">Everyone</option><option value="following">Only people I follow</option><option value="nobody">Nobody</option></select></label><label><input type="checkbox" name="presence"> Show online status to accepted conversations</label><label><input type="checkbox" name="lastSeen"> Share last seen with accepted conversations</label><p>Contact permissions are requested only when you choose Find Contacts. Revoke Google access in your Google account, and device permissions in browser or phone settings.</p><p>Camera, microphone and location are requested only when you use those features. Manage browser notification permissions in your site settings.</p><button class="btn btn-primary">Save privacy settings</button></form></section></div>
   <!-- Incoming call notification -->
   <div id="incoming-call" class="incoming-call" hidden>
     <div class="incoming-call-inner">

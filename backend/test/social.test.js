@@ -139,6 +139,7 @@ else {
   });
   test('conversation pin/mute and message state recovery enforce participant access', async () => {
     const created = await req(0,'/api/conversations','POST',{ recipientId:people[1].id }); const conversationId = created.conversation._id;
+    assert.equal((await req(1,`/api/conversations/${conversationId}/request/accept`,'POST',{})).status,200);
     assert.equal((await req(0,`/api/conversations/${conversationId}/preferences`,'PATCH',{ pinned:true,muted:true })).status,200);
     assert.equal((await req(0,'/api/conversations')).conversations.find(c => c._id === conversationId).preferences.pinned,true);
     assert.equal((await req(2,`/api/conversations/${conversationId}/preferences`,'PATCH',{ pinned:true })).status,403);

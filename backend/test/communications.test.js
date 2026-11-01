@@ -78,6 +78,9 @@ test('canonical conversation and unauthorized access', async () => {
   assert.equal(results[0].status, 201); assert.equal(results[1].status, 201);
   conversation = results[0].conversation._id;
   assert.equal(conversation, results[1].conversation._id);
+  const pending = await Conversation.findById(conversation);
+  const recipientIndex = people.findIndex(person => person.id === String(pending.requestRecipient));
+  assert.equal((await request(recipientIndex, `/conversations/${conversation}/request/accept`, 'POST', {})).status, 200);
   assert.equal((await request(2, `/conversations/${conversation}/messages`)).status, 403);
   assert.equal((await request(2, `/conversations/${conversation}/messages`, 'POST', { text: 'intrude', idempotencyKey: 'intruder-000' })).status, 403);
 });
@@ -174,7 +177,7 @@ test('private image upload does not create a public post; outsider cannot fetch 
   const other = await request(0, '/conversations', 'POST', { recipientId: people[2].id });
   assert.equal((await request(0, `/conversations/${other.conversation._id}/messages`, 'POST', { type: 'image', imageUrl, idempotencyKey: 'image-wrong-conv' })).status, 400);
   const filename = imageUrl.split('/').at(-1);
-  assert.equal((await fetch(`${base}/api/conversations/${other.conversation._id}/attachments/${filename}`, { headers: { Authorization: `Bearer ${tokens[2]}` } })).status, 404);
+  assert.equal((await fetch(`${base}/api/conversations/${other.conversation._id}/attachments/${filename}`, { headers: { Authorization: `Bearer ${tokens[2]}` } })).status, 409);
   assert.equal(await require('../models/Post').countDocuments({ author: people[0]._id }), 0);
 });
 test('notification records deduplicate and enforce recipient access', async () => {

@@ -5,6 +5,7 @@ const Conversation = require('./models/Conversation');
 const Message = require('./models/Message');
 const Call = require('./models/Call');
 const { assertContact } = require('./utils/contact');
+const messaging = require('./utils/messaging');
 
 module.exports = function attachSocketHandlers(io) {
   const users = new Map();
@@ -12,9 +13,11 @@ module.exports = function attachSocketHandlers(io) {
   const timers = new Map();
   const emitUser = (id, event, data) => io.to(`user:${id}`).emit(event, data);
   async function presence(uid, online) {
-    const conversations = await Conversation.find({ participants: uid }).select('participants');
+    const owner = await User.findById(uid).select('privacy lastSeenAt');
+    if (owner?.privacy?.presence === false) return;
+    const conversations = await Conversation.find({ participants: uid, $or: [{ requestStatus: 'accepted' }, { requestStatus: { $exists: false } }] }).select('participants');
     const peers = new Set(conversations.flatMap(c => c.participants.map(String)).filter(id => id !== uid));
-    for (const peer of peers) { try { await assertContact(uid, peer); emitUser(peer, online ? 'presence:online' : 'presence:offline', { userId: uid }); } catch { /* blocked contact */ } }
+    for (const peer of peers) { try { await assertContact(uid, peer); emitUser(peer, online ? 'presence:online' : 'presence:offline', { userId: uid, lastSeenAt: !online && owner?.privacy?.lastSeen ? owner.lastSeenAt : undefined }); } catch { /* blocked contact */ } }
   }
   async function finish(call, reason) {
     const endedAt = new Date();
@@ -79,6 +82,7 @@ module.exports = function attachSocketHandlers(io) {
       if (!mongoose.isValidObjectId(id)) throw new Error('Invalid conversation.');
       const c = await Conversation.findById(id);
       if (!c || !c.participants.map(String).includes(uid)) throw new Error('Access denied.');
+      await messaging.access(c, uid, contact);
       if (contact) await assertContact(uid, c.participants.find(p => String(p) !== uid));
       return c;
     }
@@ -93,8 +97,9 @@ module.exports = function attachSocketHandlers(io) {
     on('conversation:join', async ({ conversationId }) => {
       const c = await conversation(conversationId, false);
       await socket.join(`conv:${c._id}`);
+      if (messaging.status(c) !== 'accepted') return;
       for (const peer of c.participants.map(String).filter(id => id !== uid)) {
-        try { await assertContact(uid, peer); socket.emit(users.has(peer) ? 'presence:online' : 'presence:offline', { userId: peer }); } catch { socket.emit('presence:offline', { userId: peer }); }
+        try { await assertContact(uid, peer); const user = await User.findById(peer).select('privacy lastSeenAt'); if (user?.privacy?.presence === false) { socket.emit('presence:offline', { userId: peer }); continue; } socket.emit(users.has(peer) ? 'presence:online' : 'presence:offline', { userId: peer, lastSeenAt: user?.privacy?.lastSeen ? user.lastSeenAt : undefined }); } catch { socket.emit('presence:offline', { userId: peer }); }
       }
     });
     on('conversation:leave', async ({ conversationId }) => socket.leave(`conv:${conversationId}`));
@@ -115,12 +120,12 @@ module.exports = function attachSocketHandlers(io) {
     });
     // Delivery means an authenticated recipient client acknowledged receipt.
     on('message:received', async ({ conversationId, messageId }) => {
-      await conversation(conversationId, false);
-      const message = await Message.findOneAndUpdate({ _id: messageId, conversation: conversationId, sender: { $ne: uid }, deliveryState: 'sent' }, { $set: { deliveryState: 'delivered' } }, { new: true });
+      await conversation(conversationId, true);
+      const message = await Message.findOneAndUpdate({ _id: messageId, conversation: conversationId, sender: { $ne: uid }, deliveryState: 'sent' }, { $set: { deliveryState: 'delivered', deliveredAt: new Date() } }, { new: true });
       if (message) emitUser(message.sender, 'message:delivered', { conversationId, messageId });
     });
     on('call:invite', async ({ conversationId, recipientId, callType }) => {
-      const conv = await conversation(conversationId, false);
+      const conv = await conversation(conversationId, true);
       await assertContact(uid, recipientId, 'calls');
       if (!['audio', 'video'].includes(callType) || recipientId === uid || !conv.participants.map(String).includes(recipientId)) throw new Error();
       if (![...io.sockets.sockets.values()].some(peer => String(peer.user?._id) === recipientId && peer.callReady)) throw Object.assign(new Error('Recipient is unavailable. Ask them to open Messages.'), { status: 409 });
@@ -181,7 +186,7 @@ module.exports = function attachSocketHandlers(io) {
       users.get(uid)?.delete(socket.id);
       if (users.get(uid)?.size) return;
       users.delete(uid);
-      presence(uid, false).catch(() => {});
+      User.updateOne({ _id: uid }, { $set: { lastSeenAt: new Date() } }).then(() => presence(uid, false)).catch(() => {});
       Call.find({ state: { $ne: 'ended' }, $or: [{ caller: uid }, { recipient: uid }] })
         .then(calls => Promise.all(calls.map(call => finish(call, 'network_error')))).catch(() => {});
     });

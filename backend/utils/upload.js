@@ -7,7 +7,7 @@ fs.mkdirSync(uploadDir, { recursive: true });
 const allowed = new Map([['image/jpeg', '.jpg'], ['image/png', '.png'], ['image/webp', '.webp'], ['image/gif', '.gif']]);
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const directory = req.privateAttachment ? path.join(uploadDir, '..', path.basename(uploadDir) + '-private') : uploadDir;
+    const directory = req.privateAttachment ? (req.cloudMessageAttachment && process.env.NODE_ENV === 'production' ? path.join(require('os').tmpdir(), 'picshare-private-staging') : path.join(uploadDir, '..', path.basename(uploadDir) + '-private')) : uploadDir;
     fs.mkdirSync(directory, { recursive: true }); cb(null, directory);
   },
   filename: (_req, file, cb) => cb(null, `${crypto.randomUUID()}${allowed.get(file.mimetype) || '.bin'}`)

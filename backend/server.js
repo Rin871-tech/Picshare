@@ -107,6 +107,7 @@ const uploadLimiter = rateLimit({ windowMs: 600000, limit: 20, standardHeaders: 
 app.use('/api', (req, res, next) => req.method === 'POST' && req.is('multipart/form-data') ? uploadLimiter(req, res, next) : next());
 
 // ── API routes ────────────────────────────────────────────────────────────────
+app.use('/api/push', require('./routes/push'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/users', userRoutes);
@@ -159,6 +160,7 @@ async function start() {
     serverSelectionTimeoutMS: 15000
   });
 
+  await Promise.all([require('./models/Conversation').init(), require('./models/Message').init(), require('./models/PushSubscription').init()]);
   console.log('PicShare database connected.');
 
   const storyCleanup = setInterval(() => {

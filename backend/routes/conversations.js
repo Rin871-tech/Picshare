@@ -10,6 +10,8 @@ const User = require('../models/User');
 const auth = require('../middleware/auth');
 const asyncHandler = require('../utils/asyncHandler');
 const router = express.Router();
+const messaging = require('../utils/messaging');
+const { fail } = require('../utils/privacy');
 const { assertContact } = require('../utils/contact');
 const LocationSession = require('../models/LocationSession');
 const Post = require('../models/Post');
@@ -44,17 +46,22 @@ function assertParticipant(conversation, userId) {
 router.get('/', auth, asyncHandler(async (req, res) => {
   const conversations = await Conversation.find({ participants: req.user._id })
     .sort({ updatedAt: -1 })
-    .limit(50)
-    .populate('participants', 'username name avatarUrl');
+    .limit(500)
+    .populate('participants', 'username name avatarUrl privacy lastSeenAt');
 
   const result = await Promise.all(conversations.map(async c => {
     const other = c.participants.find(p => String(p._id) !== String(req.user._id));
+    const isBlocked = other ? await require('../utils/privacy').blocked(req.user._id, other._id) : true;
     const unreadCount = await Message.countDocuments({ conversation: c._id, sender: { $ne: req.user._id }, deleted: false, [`readBy.${req.user._id}`]: { $exists: false } });
     const latest = await Message.findOne({ conversation: c._id }).sort({ createdAt: -1, _id: -1 });
     return {
       _id: c._id,
+      requestStatus: messaging.status(c),
+      initiatedBy: c.initiatedBy, requestRecipient: c.requestRecipient,
+      online: !isBlocked && messaging.status(c) === 'accepted' && other?.privacy?.presence !== false && Boolean(req.app.get('io')?.sockets.adapter.rooms.get(`user:${other?._id}`)?.size),
+      lastSeenAt: !isBlocked && messaging.status(c) === 'accepted' && other?.privacy?.lastSeen ? other.lastSeenAt : undefined,
       preferences: c.preferences?.get(String(req.user._id)) || {},
-      participant: other,
+      participant: other ? { _id: other._id, username: other.username, name: other.name, avatarUrl: other.avatarUrl } : null,
       lastMessage: latest ? { text: latest.deleted ? 'Message deleted' : latest.text || `[${latest.type}]`, type: latest.type, sender: latest.sender, at: latest.createdAt } : c.lastMessage,
       unreadCount,
       updatedAt: c.updatedAt
@@ -62,7 +69,39 @@ router.get('/', auth, asyncHandler(async (req, res) => {
   }));
 
   result.sort((a, b) => Number(Boolean(b.preferences?.pinned)) - Number(Boolean(a.preferences?.pinned)) || new Date(b.lastMessage?.at || b.updatedAt) - new Date(a.lastMessage?.at || a.updatedAt));
-  res.json({ conversations: result });
+  const section = req.query.section || 'inbox';
+  if (!['inbox', 'requests', 'archived'].includes(section)) throw fail('Invalid inbox section.', 400);
+  const requests = result.filter(c => c.requestStatus === 'pending' && String(c.requestRecipient) === String(req.user._id) && c.lastMessage?.at);
+  const filtered = result.filter(c => {
+    if (c.requestStatus === 'declined' && String(c.requestRecipient) === String(req.user._id)) return false;
+    if (section === 'requests') return requests.includes(c);
+    if (requests.includes(c) || c.requestStatus === 'pending' && String(c.requestRecipient) === String(req.user._id)) return false;
+    return Boolean(c.preferences.archived) === (section === 'archived');
+  });
+  res.json({ conversations: filtered, requestCount: requests.length });
+}));
+
+router.post('/:id/request/:action', auth, asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id) || !['accept', 'decline', 'block'].includes(req.params.action)) throw fail('Invalid request action.', 400);
+  const conversation = await Conversation.findById(req.params.id);
+  if (!conversation) throw fail('Request not found.', 404);
+  messaging.participant(conversation, req.user._id);
+  if (String(conversation.requestRecipient) !== String(req.user._id)) throw fail('Only the recipient can resolve a request.');
+  const action = req.params.action;
+  if (messaging.status(conversation) !== 'pending' && action !== 'block' && messaging.status(conversation) !== (action === 'accept' ? 'accepted' : 'declined')) throw fail('This request has already been resolved.', 409);
+  if (action === 'block') await require('../models/Block').updateOne({ owner: req.user._id, target: conversation.initiatedBy }, { $setOnInsert: { owner: req.user._id, target: conversation.initiatedBy } }, { upsert: true });
+  if (action === 'accept') await messaging.access(conversation, req.user._id);
+  await Conversation.updateOne({ _id: conversation._id, requestStatus: 'pending' }, { $set: { requestStatus: action === 'accept' ? 'accepted' : 'declined', ...(action === 'accept' ? { acceptedAt: new Date() } : {}) } });
+  for (const id of conversation.participants) req.app.get('io')?.to(`user:${id}`).emit('conversation:updated', { conversationId: String(conversation._id) });
+  res.json({ ok: true });
+}));
+router.get('/settings', auth, (req, res) => res.json({ imageSharing: process.env.NODE_ENV !== 'production' || require('../utils/messageStorage').configured(), messages: req.user.privacy?.messages || 'everyone', presence: req.user.privacy?.presence !== false, lastSeen: req.user.privacy?.lastSeen === true }));
+router.patch('/settings', auth, asyncHandler(async (req, res) => {
+  if (req.body.messages !== undefined) { if (!['everyone', 'following', 'nobody'].includes(req.body.messages)) throw fail('Invalid message privacy.', 400); req.user.set('privacy.messages', req.body.messages); }
+  for (const key of ['presence', 'lastSeen']) if (req.body[key] !== undefined) { if (typeof req.body[key] !== 'boolean') throw fail('Invalid privacy value.', 400); req.user.set('privacy.' + key, req.body[key]); }
+  await req.user.save();
+  if (req.body.presence === false || req.body.lastSeen === false) { const rows = await Conversation.find({ participants: req.user._id }); for (const row of rows) for (const id of row.participants) if (String(id) !== String(req.user._id)) req.app.get('io')?.to(`user:${id}`).emit('presence:offline', { userId: String(req.user._id) }); }
+  res.json({ ok: true });
 }));
 
 /**
@@ -91,7 +130,8 @@ router.post('/', auth, asyncHandler(async (req, res) => {
     {
       $setOnInsert: {
         participants: [req.user._id, recipient._id].sort((a, b) => String(a).localeCompare(String(b))),
-        participantKey: key
+        participantKey: key,
+        requestStatus: 'pending', initiatedBy: req.user._id, requestRecipient: recipient._id
       }
     },
     { upsert: true, new: true }
@@ -103,6 +143,7 @@ router.post('/', auth, asyncHandler(async (req, res) => {
   res.status(201).json({
     conversation: {
       _id: conversation._id,
+      requestStatus: messaging.status(conversation), initiatedBy: conversation.initiatedBy, requestRecipient: conversation.requestRecipient,
       participant: other,
       lastMessage: conversation.lastMessage,
       unreadCount: conversation.unread?.get(String(req.user._id)) || 0,
@@ -123,6 +164,7 @@ router.get('/:id/messages', auth, asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(req.params.id);
   if (!conversation) return res.status(404).json({ error: 'Conversation not found.' });
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
 
   const limit = Math.max(1, Math.min(50, Number.parseInt(req.query.limit, 10) || 30));
   const query = { conversation: conversation._id };
@@ -143,7 +185,9 @@ router.get('/:id/messages', auth, asyncHandler(async (req, res) => {
     .populate({ path: 'replyTo', select: 'text sender type', match: { conversation: conversation._id } }).populate('postRef', 'caption imageUrl author');
 
   for (const message of messages) if (message.postRef?.author && !await require('../utils/privacy').canView(message.postRef.author, req.user._id)) message.postRef = null;
+  await messaging.delivered(req, conversation, messages);
   res.json({
+    requestStatus: messaging.status(conversation),
     messages: req.query.after ? messages : messages.reverse(), // return chronological order
     hasMore: messages.length === limit
   });
@@ -162,6 +206,7 @@ router.post('/:id/messages', auth, asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(req.params.id);
   if (!conversation) return res.status(404).json({ error: 'Conversation not found.' });
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
 
   await assertContact(req.user._id, conversation.participants.find(p => String(p) !== String(req.user._id)));
 
@@ -233,6 +278,13 @@ router.post('/:id/messages', auth, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'A valid idempotencyKey is required.' });
   }
 
+  const existing = await Message.findOne({ conversation: conversation._id, sender: req.user._id, idempotencyKey: msgData.idempotencyKey }).populate('sender', 'username name avatarUrl');
+  if (existing) return res.json({ message: existing, duplicate: true });
+  if (messaging.status(conversation) !== 'accepted') {
+    if (messaging.status(conversation) !== 'pending' || String(conversation.initiatedBy) !== String(req.user._id)) throw fail('Accept this request before replying.', 409);
+    if (type !== 'text') throw fail('Introduce yourself with one text message. Media is available after acceptance.', 409);
+    msgData.requestIntroduction = true;
+  }
   let message;
   try {
     message = await Message.create(msgData);
@@ -245,6 +297,7 @@ router.post('/:id/messages', auth, asyncHandler(async (req, res) => {
         return res.status(200).json({ message, duplicate: true });
       }
     }
+    if (err.code === 11000 && msgData.requestIntroduction) throw fail('Wait for this request to be accepted before sending another message.', 409);
     throw err;
   }
 
@@ -290,12 +343,8 @@ router.patch('/:id/read', auth, asyncHandler(async (req, res) => {
 
   const conversation = await Conversation.findById(req.params.id);
   if (!conversation) return res.status(404).json({ error: 'Conversation not found.' });
-  assertParticipant(conversation, req.user._id);
-
+  await messaging.access(conversation, req.user._id, true);
   const userKey = String(req.user._id);
-  await Conversation.findByIdAndUpdate(conversation._id, {
-    $set: { [`unread.${userKey}`]: 0 }
-  });
 
   let through;
   if (req.body.through) {
@@ -303,6 +352,7 @@ router.patch('/:id/read', auth, asyncHandler(async (req, res) => {
     through = await Message.findOne({ _id: req.body.through, conversation: conversation._id });
     if (!through) return res.sendStatus(400);
   } else return res.status(400).json({ error: 'through message cursor is required.' });
+  const receiptAt = new Date();
   // Mark only messages through the last displayed message as read.
   await Message.updateMany(
     {
@@ -311,16 +361,13 @@ router.patch('/:id/read', auth, asyncHandler(async (req, res) => {
       deliveryState: { $ne: 'read' },
       $or: [{ createdAt: { $lt: through.createdAt } }, { createdAt: through.createdAt, _id: { $lte: through._id } }]
     },
-    {
-      $set: {
-        deliveryState: 'read',
-        [`readBy.${userKey}`]: new Date()
-      }
-    }
+    [{ $set: { deliveryState: 'read', deliveredAt: { $ifNull: ['$deliveredAt', receiptAt] }, readAt: receiptAt, [`readBy.${userKey}`]: receiptAt } }]
   );
 
+  const unreadCount = await Message.countDocuments({ conversation: conversation._id, sender: { $ne: req.user._id }, deleted: false, [`readBy.${userKey}`]: { $exists: false } });
+  await Conversation.updateOne({ _id: conversation._id }, { $set: { [`unread.${userKey}`]: unreadCount } });
   req.app.get('io')?.to(`conv:${conversation._id}`).emit('conversation:read', { conversationId: String(conversation._id), readBy: userKey, through: String(through._id), at: through.createdAt });
-  res.json({ ok: true });
+  res.json({ ok: true, unreadCount });
 }));
 
 /**
@@ -342,6 +389,7 @@ router.delete('/messages/:messageId', auth, asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(message.conversation);
   if (!conversation) return res.status(404).json({ error: 'Conversation not found.' });
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
 
   message.deleted = true;
   message.deletedAt = new Date();
@@ -361,12 +409,17 @@ router.post('/:id/attachments', auth, asyncHandler(async (req, res, next) => {
   const conversation = await Conversation.findById(req.params.id);
   if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
   await assertContact(req.user._id, conversation.participants.find(p => String(p) !== String(req.user._id)));
+  await messaging.access(conversation, req.user._id, true);
+  if (process.env.NODE_ENV === 'production' && !require('../utils/messageStorage').configured()) throw fail('Private image storage is not configured yet. Text messages are available.', 503);
+  req.cloudMessageAttachment = true;
   req.privateAttachment = true;
   next();
 }), upload.single('image'), asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Choose an image.' });
-  await Attachment.create({ owner: req.user._id, conversation: req.params.id, filename: req.file.filename });
+  const storage = await require('../utils/messageStorage').save(req.file);
+  await Attachment.create({ owner: req.user._id, conversation: req.params.id, filename: req.file.filename, ...storage });
   res.status(201).json({ imageUrl: `/api/conversations/${req.params.id}/attachments/${req.file.filename}` });
 }));
 
@@ -375,7 +428,12 @@ router.get('/:id/attachments/:file', auth, asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(req.params.id);
   if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
-  if (!await Attachment.exists({ conversation: conversation._id, filename: req.params.file })) return res.sendStatus(404);
+  await messaging.access(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id, true);
+  const attachment = await Attachment.findOne({ conversation: conversation._id, filename: req.params.file }).select('+objectKey');
+  if (!attachment) return res.sendStatus(404);
+  res.set('Cache-Control', 'private, no-store');
+  if (attachment.storage === 's3') return require('../utils/messageStorage').read(attachment, res);
   const path = require('path');
   const root = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
   res.set('Cache-Control', 'private, no-store');
@@ -389,7 +447,9 @@ router.patch('/messages/:messageId' , auth, asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(message.conversation);
   if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
   await assertContact(req.user._id, conversation.participants.find(p => String(p) !== String(req.user._id)));
+  await messaging.access(conversation, req.user._id, true);
   if (req.body.reaction !== undefined) {
     const reaction = req.body.reaction;
     if (!['', '❤️', '👍', '😂', '😮', '😢'].includes(reaction)) return res.sendStatus(400);
@@ -411,14 +471,17 @@ router.patch('/:id/preferences', auth, asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.sendStatus(400);
   const conversation = await Conversation.findById(req.params.id); if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
   const update = {};
-  for (const key of ['pinned', 'muted']) if (req.body[key] !== undefined) { if (typeof req.body[key] !== 'boolean') return res.sendStatus(400); update[`preferences.${req.user._id}.${key}`] = req.body[key]; }
+  for (const key of ['pinned', 'muted', 'archived']) if (req.body[key] !== undefined) { if (typeof req.body[key] !== 'boolean') return res.sendStatus(400); update[`preferences.${req.user._id}.${key}`] = req.body[key]; }
   await Conversation.updateOne({ _id: conversation._id }, { $set: update }); res.json({ ok: true });
 }));
 router.get('/:id/calls', auth, asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.sendStatus(400);
   const conversation = await Conversation.findById(req.params.id); if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id, true);
   const filter = { conversation: conversation._id }; if (req.query.before) { if (!mongoose.isValidObjectId(req.query.before)) return res.sendStatus(400); filter._id = { $lt: req.query.before }; }
   const calls = await require('../models/Call').find(filter).sort({ _id: -1 }).limit(30);
   res.json({ calls, hasMore: calls.length === 30, nextCursor: calls.at(-1)?._id });
@@ -427,9 +490,11 @@ router.post('/:id/messages/state', auth, asyncHandler(async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.sendStatus(400);
   const conversation = await Conversation.findById(req.params.id); if (!conversation) return res.sendStatus(404);
   assertParticipant(conversation, req.user._id);
+  await messaging.access(conversation, req.user._id);
   if (!Array.isArray(req.body.ids) || req.body.ids.length > 50 || req.body.ids.some(id => typeof id !== 'string' || !mongoose.isValidObjectId(id))) return res.sendStatus(400);
   const messages = await Message.find({ conversation: conversation._id, _id: { $in: req.body.ids } }).populate('sender', 'username name avatarUrl').populate({ path: 'replyTo', select: 'text sender type', match: { conversation: conversation._id } }).populate('postRef', 'caption imageUrl author');
   for (const message of messages) if (message.postRef?.author && !await require('../utils/privacy').canView(message.postRef.author, req.user._id)) message.postRef = null;
+  await messaging.delivered(req, conversation, messages);
   res.json({ messages });
 }));
 router.post('/messages/:messageId/forward', auth, asyncHandler(async (req, res) => {
@@ -437,6 +502,8 @@ router.post('/messages/:messageId/forward', auth, asyncHandler(async (req, res) 
   const original = await Message.findById(req.params.messageId); if (!original || original.deleted || original.type !== 'text') return res.status(400).json({ error: 'Only existing text messages can be forwarded.' });
   const source = await Conversation.findById(original.conversation); if (!source) return res.sendStatus(404); assertParticipant(source, req.user._id);
   const destination = await Conversation.findById(req.body.conversationId); if (!destination) return res.sendStatus(404); assertParticipant(destination, req.user._id);
+  await messaging.access(source, req.user._id, true);
+  await messaging.access(destination, req.user._id, true);
   const recipient = destination.participants.find(p => String(p) !== String(req.user._id)); await assertContact(req.user._id, recipient);
   let message;
   try { message = await Message.create({ conversation: destination._id, sender: req.user._id, type: 'text', text: original.text, idempotencyKey: req.body.idempotencyKey }); }

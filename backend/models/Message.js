@@ -43,6 +43,10 @@ const messageSchema = new mongoose.Schema({
     default: 'sent'
   },
 
+  deliveredAt: Date,
+  readAt: Date,
+  requestIntroduction: { type: Boolean, default: false },
+
   // Read receipts: { userId: timestamp }
   readBy: { type: Map, of: Date, default: {} },
 
@@ -65,4 +69,6 @@ messageSchema.index(
   { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
 );
 
+messageSchema.index({ conversation: 1 }, { name: 'one_request_introduction', unique: true, partialFilterExpression: { requestIntroduction: true } });
+messageSchema.index({ conversation: 1, sender: 1, deliveryState: 1 });
 module.exports = mongoose.model('Message', messageSchema);

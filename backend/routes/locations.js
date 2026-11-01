@@ -50,6 +50,7 @@ router.post('/live', auth, asyncHandler(async (req, res) => {
   const recipientId = participants.find(id => id !== String(req.user._id));
   if (!recipientId) return res.status(400).json({ error: 'Conversation has no other participant.' });
 
+  await require('../utils/messaging').access(conversation, req.user._id, true);
   await assertContact(req.user._id, recipientId);
 
   // Revoke any existing active session for this owner in this conversation

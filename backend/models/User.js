@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
     }
   },
   googleId: { type: String, trim: true },
+  lastSeenAt: Date,
   contactDiscoverable: { type: Boolean, default: false },
   bio: { type: String, default: '', maxlength: 160 },
   avatarUrl: { type: String, default: '' },
@@ -23,6 +24,8 @@ const userSchema = new mongoose.Schema({
     messages: { type: String, enum: ['everyone', 'following', 'nobody'], default: 'everyone' },
     calls: { type: String, enum: ['everyone', 'following', 'nobody'], default: 'everyone' },
     stories: { type: String, enum: ['public', 'followers'], default: 'public' },
+    presence: { type: Boolean, default: true },
+    lastSeen: { type: Boolean, default: false },
     notifications: { type: Boolean, default: true }
   }
 
@@ -35,6 +38,7 @@ const userSchema = new mongoose.Schema({
       delete ret.contactDiscoverable;
       delete ret.__v;
       delete ret.privacy;
+      delete ret.lastSeenAt;
       return ret;
     }
   }

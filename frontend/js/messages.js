@@ -114,6 +114,8 @@
       state.user = data.user;
       const settings = await PicShareAPI.get('/settings').catch(() => ({}));
       state.browserNotify = settings.privacy?.notifications !== false;
+      const messaging = await PicShareAPI.get('/conversations/settings');
+      state.imageSharing = messaging.imageSharing !== false;
     } catch (err) {
       if (err.status === 401) { PicShareAPI.setToken(null); window.location.href = '/?auth=login'; return; }
       $('#auth-guard').hidden = false;
@@ -161,6 +163,10 @@
       loadConversations();
     });
 
+    socket.on('conversation:updated', async ({ conversationId }) => {
+      await loadConversations();
+      if (conversationId === state.activeConvId) { const conv = currentConversation(); if (conv) { requestControls(); await loadMessages(conversationId, true); await markRead(conversationId); } else { $('#conv-thread').hidden = true; $('#conv-empty-state').hidden = false; state.activeConvId = null; } }
+    });
     socket.on('connect_error', err => {
       console.warn('[socket] connect error:', err.message);
     });
@@ -174,7 +180,8 @@
       state.onlineUsers.add(String(userId));
       updatePresenceUI(String(userId), true);
     });
-    socket.on('presence:offline', ({ userId }) => {
+    socket.on('presence:offline', ({ userId, lastSeenAt }) => {
+      const conv = state.conversations.find(c => String(c.participant?._id) === String(userId)); if (conv) conv.lastSeenAt = lastSeenAt;
       state.onlineUsers.delete(String(userId));
       updatePresenceUI(String(userId), false);
     });
@@ -269,12 +276,31 @@
   }
 
   // ── Conversations ──────────────────────────────────────────────────────────
+  let inboxSection = 'inbox';
+  function currentConversation() { return state.conversations.find(c => String(c._id) === state.activeConvId); }
+  function requestControls() {
+    const conv = currentConversation(); const pending = conv?.requestStatus === 'pending'; const declined = conv?.requestStatus === 'declined';
+    const recipient = String(conv?.requestRecipient) === String(state.user?._id);
+    const sent = state.messages.some(m => String(m.sender?._id || m.sender) === String(state.user?._id));
+    const banner = $('#request-banner'); banner.hidden = !pending && !declined;
+    banner.innerHTML = declined ? 'This request is closed.' : recipient ? '<strong>Message request</strong><p>Accept to reply, share media and show read receipts.</p><button class="btn btn-primary" data-request-action="accept">Accept</button> <button class="btn btn-secondary" data-request-action="decline">Delete request</button> <button class="btn btn-secondary" data-request-action="block">Block</button>' : sent ? 'Request sent. You can send more after it is accepted.' : 'Send one text introduction. The recipient must accept before you can send more.';
+    $('#msg-text').disabled = declined || pending && (recipient || sent);
+    $('#msg-text').placeholder = $('#msg-text').disabled ? 'Waiting for request acceptance' : 'Message…';
+    $('#composer-attach-btn').disabled = pending || declined || state.imageSharing === false;
+    $('#composer-attach-btn').title = state.imageSharing === false ? 'Private image storage is not configured yet' : 'Attach media';
+    $('#btn-call-audio').disabled = pending || declined; $('#btn-call-video').disabled = pending || declined;
+    if ($('#msg-text').disabled) $('#composer-send-btn').disabled = true;
+  }
   async function loadConversations() {
     const list = $('#conv-list');
     try {
-      const data = await PicShareAPI.get('/conversations');
+      const section = inboxSection;
+      const data = await PicShareAPI.get('/conversations?section=' + section);
+      if (inboxSection !== section) return;
+      $('#request-count').textContent = data.requestCount || '';
       state.conversations = data.conversations || [];
       renderConvList(state.conversations);
+      if (state.activeConvId) requestControls();
     } catch (err) {
       list.innerHTML = `<p class="muted" style="padding:16px;font-size:12px">Failed to load conversations. ${esc(err.message)}</p>`;
     }
@@ -283,7 +309,7 @@
   function renderConvList(conversations) {
     const list = $('#conv-list');
     if (!conversations.length) {
-      list.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted);font-size:13px">No conversations yet.<br>Start one with a friend!</div>`;
+      list.innerHTML = `<div style="padding:30px 16px;text-align:center;color:var(--muted);font-size:13px">${inboxSection === 'requests' ? 'No message requests.' : inboxSection === 'archived' ? 'No archived conversations.' : 'No conversations yet.<br>Start one with a friend!'}</div>`;
       return;
     }
     list.innerHTML = conversations.map(conv => convItemHtml(conv)).join('');
@@ -291,7 +317,7 @@
 
   function convItemHtml(conv) {
     const peer = conv.participant;
-    const online = peer && state.onlineUsers.has(String(peer._id));
+    const online = peer && (conv.online || state.onlineUsers.has(String(peer._id)));
     const unread = Number(conv.unreadCount || 0);
     const lastMsg = conv.lastMessage;
     let preview = '';
@@ -313,6 +339,7 @@
           <span class="conv-item-name">${conv.preferences?.pinned ? '⌖ ' : ''}${esc(peer?.name || peer?.username || 'Unknown')}${conv.preferences?.muted ? ' · muted' : ''}</span>
           <span class="conv-item-time">${lastMsg?.at ? relativeTime(lastMsg.at) : ''}</span>
         </div>
+        <small class="conv-item-username">@${esc(peer?.username || 'member')}</small>
         <div class="conv-item-preview ${unread ? 'font-weight:700' : ''}">${preview || '@' + esc(peer?.username || '')}</div>
       </div>
       ${unread ? `<div class="conv-item-unread">${unread > 99 ? '99+' : unread}</div>` : ''}
@@ -364,7 +391,8 @@
     // Load messages
     await loadMessages(convId, true);
 
-    // Mark as read
+    requestControls();
+    // Pending request previews never emit read receipts.
     await markRead(convId);
   }
 
@@ -387,15 +415,16 @@
     const peer = state.activePeer;
     $('#thread-peer-avatar').innerHTML = avatarHtml(peer);
     $('#thread-peer-name').textContent = peer?.name || peer?.username || 'Unknown';
-    updatePresenceUI(peer?._id, state.onlineUsers.has(String(peer?._id)));
+    updatePresenceUI(peer?._id, Boolean(currentConversation()?.online) || state.onlineUsers.has(String(peer?._id)));
   }
 
   function updatePresenceUI(userId, online) {
+    state.conversations.filter(c => String(c.participant?._id) === String(userId)).forEach(c => { c.online = online; });
     // Thread header status
     if (state.activePeer && String(state.activePeer._id) === String(userId)) {
       const statusEl = $('#thread-peer-status');
       if (statusEl) {
-        statusEl.textContent = online ? 'online' : 'offline';
+        statusEl.textContent = online ? 'online' : currentConversation()?.lastSeenAt ? 'last seen ' + relativeTime(currentConversation().lastSeenAt) : 'offline';
         statusEl.className = 'thread-peer-status' + (online ? ' online' : '');
       }
     }
@@ -422,6 +451,7 @@
       const url = `/conversations/${convId}/messages?limit=30${oldest ? `&before=${oldest._id}` : ''}`;
       const data = await PicShareAPI.get(url);
       if (convId !== state.activeConvId) return;
+      const conv = currentConversation(); if (conv && data.requestStatus) conv.requestStatus = data.requestStatus;
       const msgs = data.messages || [];
       for (const message of msgs) state.socket?.emit('message:received', { conversationId: convId, messageId: message._id });
       state.hasMoreMessages = data.hasMore;
@@ -577,7 +607,7 @@
     const meta = document.createElement('div');
     meta.className = 'msg-meta';
     const time = new Date(msg.createdAt);
-    meta.innerHTML = `${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${mine ? ` <span class="msg-status">${statusIcon(msg.deliveryState)}</span>` : ''}`;
+    meta.innerHTML = `${time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${mine ? ` <span class="msg-status" data-state="${esc(msg.deliveryState || 'sent')}" aria-label="${esc(msg.deliveryState || 'sent')}">${statusIcon(msg.deliveryState)} ${esc(msg.deliveryState || 'sent')}</span>` : ''}`;
 
     const wrap = document.createElement('div');
     wrap.style.display = 'flex';
@@ -587,7 +617,7 @@
     wrap.appendChild(bubble);
     wrap.appendChild(meta);
     row.appendChild(wrap);
-    if (!msg.deleted) {
+    if (!msg.deleted && (!currentConversation()?.requestStatus || currentConversation().requestStatus === 'accepted')) {
       const actions = document.createElement('div'); actions.className = 'message-actions';
       const button = (label, action) => { const b = document.createElement('button'); b.className = 'text-link'; b.textContent = label; b.onclick = action; actions.appendChild(b); };
       button('Reply', () => { replyTo = msg._id; toast('Replying to ' + (msg.text || msg.type)); $('#msg-text').focus(); });
@@ -611,7 +641,8 @@
     const el = $(`[data-msg-id="${CSS.escape(messageId)}"]`);
     if (!el) return;
     const statusEl = el.querySelector('.msg-status');
-    if (statusEl) statusEl.textContent = statusIcon(status);
+    if (statusEl) { statusEl.textContent = statusIcon(status) + ' ' + status; statusEl.dataset.state = status; statusEl.setAttribute('aria-label', status); }
+    const message = state.messages.find(m => m._id === messageId); if (message) message.deliveryState = status;
   }
 
   function scrollToBottom() {
@@ -636,10 +667,11 @@
   async function markRead(convId) {
     try {
       const through = state.messages.at(-1)?._id;
+      if (currentConversation()?.requestStatus && currentConversation().requestStatus !== 'accepted') return;
       if (!through || convId !== state.activeConvId || document.visibilityState !== 'visible') return;
-      await PicShareAPI.patch(`/conversations/${convId}/read`, { through });
+      const receipt = await PicShareAPI.patch(`/conversations/${convId}/read`, { through });
       const conv = state.conversations.find(c => String(c._id) === convId);
-      if (conv) { conv.unreadCount = 0; renderConvList(state.conversations); }
+      if (conv) { conv.unreadCount = Number(receipt.unreadCount || 0); renderConvList(state.conversations); }
     } catch { /* non-critical */ }
   }
 
@@ -688,7 +720,7 @@
       const data = await PicShareAPI.post(`/conversations/${conversationId}/messages`, body);
       if (conversationId === state.activeConvId) { appendMessage(data.message); scrollToBottom(); }
       updateConvPreview(conversationId, data.message);
-      replyTo = null; pending.remove();
+      replyTo = null; pending.remove(); requestControls();
     };
     for (let attempt = 0; attempt < 3; attempt++) {
       try { await send(); return true; }
@@ -1113,15 +1145,21 @@
 
   // ── Event listeners ────────────────────────────────────────────────────────
   function attachEventListeners() {
+    document.querySelectorAll('[data-inbox]').forEach(button => button.addEventListener('click', () => { inboxSection = button.dataset.inbox; document.querySelectorAll('[data-inbox]').forEach(b => b.classList.toggle('active', b === button)); $('#conv-thread').hidden = true; $('#conv-empty-state').hidden = false; $('#conv-sidebar').classList.remove('hidden-mobile'); if (state.activeConvId) state.socket?.emit('conversation:leave', { conversationId: state.activeConvId }); state.activeConvId = null; loadConversations(); }));
+    $('#request-banner').addEventListener('click', async event => { const action = event.target.closest('[data-request-action]')?.dataset.requestAction; if (!action || !state.activeConvId) return; if (action !== 'accept' && !confirm(action === 'block' ? 'Block this person and close the request?' : 'Delete this request? They cannot send more messages in this conversation.')) return; const id = state.activeConvId; try { await PicShareAPI.post(`/conversations/${id}/request/${action}`, {}); inboxSection = 'inbox'; document.querySelectorAll('[data-inbox]').forEach(b => b.classList.toggle('active', b.dataset.inbox === inboxSection)); state.activeConvId = null; await loadConversations(); if (action === 'accept') await openConversationById(id); else { $('#conv-thread').hidden = true; $('#conv-empty-state').hidden = false; $('#conv-sidebar').classList.remove('hidden-mobile'); } } catch (err) { toast(err.message); } });
+    $('#messaging-settings-btn').addEventListener('click', async () => { try { const data = await PicShareAPI.get('/conversations/settings'); const form = $('#messaging-settings-form'); form.elements.messages.value = data.messages; form.elements.presence.checked = data.presence; form.elements.lastSeen.checked = data.lastSeen; openModal('messaging-settings'); } catch (err) { toast(err.message); } });
+    $('#messaging-settings-form').addEventListener('submit', async event => { event.preventDefault(); const form = event.currentTarget; try { await PicShareAPI.patch('/conversations/settings', { messages: form.elements.messages.value, presence: form.elements.presence.checked, lastSeen: form.elements.lastSeen.checked }); closeModal('messaging-settings'); toast('Messaging privacy saved.'); } catch (err) { toast(err.message); } });
+
     $('#btn-thread-info').addEventListener('click', async () => {
       const panel = $('#conversation-details'); panel.hidden = !panel.hidden; if (panel.hidden || !state.activeConvId) return;
       try { const { calls } = await PicShareAPI.get(`/conversations/${state.activeConvId}/calls`); const conv = state.conversations.find(c => String(c._id) === state.activeConvId);
-        panel.innerHTML = `<button class="text-link" data-conv-pref="pinned">${conv?.preferences?.pinned ? 'Unpin':'Pin'} conversation</button><button class="text-link" data-conv-pref="muted">${conv?.preferences?.muted ? 'Unmute':'Mute'} alerts</button><a class="text-link" href="/?profile=${esc(state.activePeer?._id)}">View profile</a><h3>Call history</h3>${calls.map(c => `<p>${esc(c.callType)} · ${esc(c.endReason || c.state)} · ${esc(new Date(c.createdAt).toLocaleString())} · ${c.durationSeconds || 0}s</p>`).join('') || '<p>No calls yet.</p>'}`;
+        panel.innerHTML = `<button class="text-link" data-conv-pref="pinned">${conv?.preferences?.pinned ? 'Unpin':'Pin'} conversation</button><button class="text-link" data-conv-pref="archived">${conv?.preferences?.archived ? 'Unarchive' : 'Archive'} conversation</button><button class="text-link" data-conv-pref="muted">${conv?.preferences?.muted ? 'Unmute':'Mute'} alerts</button><a class="text-link" href="/?profile=${esc(state.activePeer?._id)}">View profile</a><h3>Call history</h3>${calls.map(c => `<p>${esc(c.callType)} · ${esc(c.endReason || c.state)} · ${esc(new Date(c.createdAt).toLocaleString())} · ${c.durationSeconds || 0}s</p>`).join('') || '<p>No calls yet.</p>'}`;
       } catch (err) { panel.textContent = err.message; }
     });
     $('#conversation-details').addEventListener('click', async e => { const button = e.target.closest('[data-conv-pref]'); if (!button) return; const conv = state.conversations.find(c => String(c._id) === state.activeConvId); const key = button.dataset.convPref; try { await PicShareAPI.patch(`/conversations/${state.activeConvId}/preferences`, { [key]: !conv?.preferences?.[key] }); await loadConversations(); $('#conversation-details').hidden = true; } catch(err) { toast(err.message); } });
     $('#enable-notifications')?.addEventListener('click', async () => {
       if (!window.Notification) { toast('Browser notifications are unavailable. Use this inbox for alerts.'); return; }
+      if (!confirm('Enable browser alerts for new messages while PicShare is open? You can revoke this permission in browser site settings.')) return;
       const permission = await Notification.requestPermission();
       toast(permission === 'granted' ? 'Browser notifications enabled while Messages is open.' : 'Use the conversation inbox for notifications.');
     });
@@ -1165,11 +1203,14 @@
       newConvTimer = setTimeout(() => searchPeopleForNewConv(q), 280);
     });
 
+    $('#inbox-user-results').addEventListener('click', e => { const id = e.target.closest('[data-inbox-user]')?.dataset.inboxUser; if (id) { inboxSection = 'inbox'; startOrOpenDm(id); } });
     // Conversation search filter
-    let convSearchTimer;
+    let convSearchTimer, peopleSearchTimer;
     $('#conv-search').addEventListener('input', () => {
-      clearTimeout(convSearchTimer);
+      clearTimeout(convSearchTimer); clearTimeout(peopleSearchTimer);
       const q = $('#conv-search').value.trim().toLowerCase();
+      $('#inbox-user-results').replaceChildren();
+      if (q.length >= 2) peopleSearchTimer = setTimeout(async () => { try { const { users } = await PicShareAPI.get('/users/search?q=' + encodeURIComponent(q)); if ($('#conv-search').value.trim().toLowerCase() !== q) return; $('#inbox-user-results').innerHTML = '<p class="muted small">People on PicShare</p>' + users.filter(u => !u.isMe).map(u => `<button class="inbox-user" data-inbox-user="${esc(u._id)}">${avatarHtml(u)}<span>${esc(u.name)}<small>@${esc(u.username)}</small></span></button>`).join(''); } catch { /* conversation search remains available */ } }, 280);
       convSearchTimer = setTimeout(() => {
         const filtered = state.conversations.filter(c =>
           (c.participant?.name || '').toLowerCase().includes(q) ||
